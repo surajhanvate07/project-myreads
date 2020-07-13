@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
 import { Route, Link } from 'react-router-dom';
+import { debounce } from 'throttle-debounce';
 import * as BooksAPI from './BooksAPI';
 import './App.css';
 // import getAll from './data';
@@ -19,29 +20,38 @@ class BooksApp extends Component {
       this.setState({ books: books });
     });
   };
-  moveBook = (bookId, shelf) => {
-    const updatedBooks = this.state.books.map(book => {
-      if (book.id === bookId) {
-        book.shelf = shelf;
+  moveBook = (book, shelf) => {
+    BooksAPI.update(book, shelf).then(books => {
+      console.log(books);
+    });
+    const updatedBooks = this.state.books.map(b => {
+      if (b.id === book.id) {
+        b.shelf = shelf;
       }
-      return book;
+      return b;
     });
 
-    this.setState(
-      prevState => ({
-        books: updatedBooks,
-      }),
-      () => {
-        console.log(this.state.books);
-      }
-    );
+    this.setState({
+      books: updatedBooks,
+    });
   };
-
-  searchForBooks = query => {
+  searchForBooks = debounce(300, false, query => {
     console.log(query);
-    BooksAPI.search(query).then(books => {
-      this.setState({ searchBooks: books });
-    });
+    if (query.length > 0) {
+      BooksAPI.search(query).then(books => {
+        console.log(books);
+        if (books.error) {
+          this.setState({ searchBooks: [] });
+        } else {
+          this.setState({ searchBooks: books });
+        }
+      });
+    } else {
+      this.setState({ searchBooks: [] });
+    }
+  });
+  resetSearch = () => {
+    this.setState({ searchBooks: [] });
   };
 
   render() {
@@ -66,6 +76,7 @@ class BooksApp extends Component {
               books={searchBooks}
               onSearch={this.searchForBooks}
               onMove={this.moveBook}
+              onResetSearch={this.resetSearch}
             />
           )}
         />
@@ -145,13 +156,16 @@ const Book = props => {
             style={{
               width: 128,
               height: 193,
-              backgroundImage: `url(${book.imageLinks.thumbnail})`,
+              backgroundImage: `url(${book.imageLinks &&
+                book.imageLinks.thumbnail})`,
             }}
           />
-          <BookshelfChanger bookId={book.id} shelf={shelf} onMove={onMove} />
+          <BookshelfChanger book={book} shelf={shelf} onMove={onMove} />
         </div>
         <div className="book-title">{book.title}</div>
-        <div className="book-authors">{book.authors.join(', ')}</div>
+        <div className="book-authors">
+          {book.authors && book.authors.join(', ')}
+        </div>
       </div>
     </li>
   );
@@ -163,10 +177,9 @@ class BookshelfChanger extends Component {
   };
   handleChange = event => {
     this.setState({ value: event.target.value });
-    this.props.onMove(this.props.bookId, event.target.value);
+    this.props.onMove(this.props.book, event.target.value);
   };
   render() {
-    // console.log(this.props.shelf);
     return (
       <div className="book-shelf-changer">
         <select value={this.state.value} onChange={this.handleChange}>
@@ -185,11 +198,10 @@ class BookshelfChanger extends Component {
 
 class SearchBooks extends Component {
   render() {
-    const { books, onSearch } = this.props;
-    // console.log(books);
+    const { books, onSearch, onResetSearch } = this.props;
     return (
       <div className="search-books">
-        <SearchBar onSearch={onSearch} />
+        <SearchBar onSearch={onSearch} onResetSearch={onResetSearch} />
         <SearchResults books={books} />
       </div>
     );
@@ -197,19 +209,22 @@ class SearchBooks extends Component {
 }
 
 const SearchBar = props => {
-  const { onSearch } = props;
+  const { onSearch, onResetSearch } = props;
   return (
     <div className="search-books-bar">
-      <CloseSearchButton />
+      <CloseSearchButton onResetSearch={onResetSearch} />
       <SearchBooksInput onSearch={onSearch} />
     </div>
   );
 };
 
-const CloseSearchButton = () => {
+const CloseSearchButton = props => {
+  const { onResetSearch } = props;
   return (
     <Link to="/">
-      <button className="close-search">Close</button>
+      <button className="close-search" onClick={onResetSearch}>
+        Close
+      </button>
     </Link>
   );
 };
@@ -219,23 +234,24 @@ class SearchBooksInput extends Component {
     value: '',
   };
   handleChange = event => {
-    this.setState({ value: event.target.value });
-  };
-  handleSubmit = e => {
-    e.preventDefault();
-    this.props.onSearch(this.state.value);
+    const val = event.target.value;
+    this.setState({ value: val }, () => {
+      console.log(val);
+      // if (val.length >= 1) {
+      this.props.onSearch(val);
+      // }
+    });
   };
   render() {
     return (
       <div className="search-books-input-wrapper">
-        <form onSubmit={this.handleSubmit}>
-          <input
-            type="text"
-            value={this.state.value}
-            placeholder="Search by title or author"
-            onChange={this.handleChange}
-          />
-        </form>
+        <input
+          type="text"
+          value={this.state.value}
+          placeholder="Search by title or author"
+          onChange={this.handleChange}
+          autoFocus
+        />
       </div>
     );
   }
