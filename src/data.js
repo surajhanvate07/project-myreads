@@ -1,4 +1,3 @@
-/* cSpell:disable */
 const getAll = [
     {
       title: 'The Linux Command Line',
@@ -332,6 +331,5 @@ const getAll = [
       shelf: 'read',
     },
   ];
-  /* cSpell: enable */
   
   export default getAll;  
